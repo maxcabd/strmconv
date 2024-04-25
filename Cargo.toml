@@ -1,0 +1,29 @@
+[package]
+name = "strmconv"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# used for reading and writing binary files
+binrw = "0.10.0"
+
+# better hashmap implementation
+hashbrown = "0.12"
+
+# used for maintaining insertion order in maps
+indexmap = "1.7.0"
+
+# used for progress bars
+indicatif = {version = "0.17.7", features = ["rayon"]}
+
+# used for parallel processing
+rayon = "1.5"
+
+# used for reading and writing JSON files
+serde = { version = "1.0.130", features = ["derive"] }
+serde_json = "1.0"
+
+# used for reading and writing CyberConnect2's XFBIN files
+xfbin = { path = "../xfbin" }
