@@ -49,6 +49,7 @@ pub fn convert_anmstrm(
         })
     }).collect::<Vec<_>>();
 
+
     let anmstrm_entries = build_anmstrm_entries_map(anmstrmframes)?;
 
     let anm_entries = convert_entries(anmstrm_entries);
@@ -92,7 +93,8 @@ fn build_entries_from_frames(anmstrmframes: Vec<&NuccAnmStrmFrame>) -> Vec<Vec<A
                 | Entry::Camera(_)
                 | Entry::LightDirc(_)
                 | Entry::LightPoint(_)
-                | Entry::Ambient(_) => {
+                | Entry::Ambient(_)
+                | Entry::MorphModel(_) => {
                     anmstrm_entries[entry_index].push(entry.clone());
                 }
                 _ => {}
@@ -718,6 +720,41 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                         strength_values.push(anm_entry_ambient.intensity);
                     }
                 }
+
+                Entry::MorphModel(anm_entry_morphmodel) => {
+                    anm_entry.entry_format = AnmEntryFormat::MORPHMODEL as u16;
+
+                    if frame == 0 {
+                        anm_entry.curves.push(Curve::Float(Vec::new()));
+                        anm_entry.curves.push(Curve::Float(Vec::new()));
+
+                        anm_entry.curve_headers.push(CurveHeader {
+                            curve_index,
+                            curve_format: AnmCurveFormat::FLOAT1ALT as u16, // Curve format for Float
+                            frame_count: 0,
+                            curve_size: 0,
+                        });
+
+                        anm_entry.curve_headers.push(CurveHeader {
+                            curve_index: curve_index + 1,
+                            curve_format: AnmCurveFormat::FLOAT1ALT as u16, // Curve format for Float
+                            frame_count: 0,
+                            curve_size: 0,
+                        });
+
+                        curve_index += 2;
+                    }
+
+                        // Push keyframes for morph model
+                        if let Curve::Float(morph_values) = &mut anm_entry.curves[0] {
+                            morph_values.push(anm_entry_morphmodel.morph_weight[0]);
+                        }
+
+                        if let Curve::Float(morph_values) = &mut anm_entry.curves[1] {
+                            morph_values.push(anm_entry_morphmodel.morph_weight[1]);
+                        }
+                    
+                }
                 _ => {
                     // Handle other entry types if necessary
                     // ...
@@ -736,8 +773,8 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
             }
 
             //If curve is RBG we need to pad the color values to be a multiple of 4
-            if curve.get_curve_format() == AnmCurveFormat::BYTE3 as u16 {
-                curve.pad_color_values();
+            if curve.get_curve_format() == AnmCurveFormat::BYTE3 as u16 || curve.get_curve_format() == AnmCurveFormat::SHORT3 as u16 {
+                curve.pad_values();
             }
             // Make sure we update the frame count and curve size for the curves
             curve_header.curve_size += 0xC;

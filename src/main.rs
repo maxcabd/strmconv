@@ -2,18 +2,19 @@ mod convert;
 
 use std::path::Path;
 use xfbin::nucc_chunk::NuccChunkType;
-use xfbin::nucc::{NuccCamera, NuccLightDirc, NuccLightPoint, NuccLayerSet, NuccAmbient, NuccStruct, NuccStructInfo, NuccStructReference};
+use xfbin::nucc::{NuccCamera, NuccLightDirc, NuccLightPoint, NuccLayerSet, NuccAmbient, NuccMorphModel, NuccStruct, NuccStructInfo, NuccStructReference};
 use xfbin::{read_xfbin, write_xfbin};
 use xfbin::{Xfbin, xfbin::XfbinPage};
 use convert::convert_anmstrm;
 
 
-const CHUNK_TYPES_TO_ADD: [NuccChunkType; 5] = [
+const CHUNK_TYPES_TO_ADD: [NuccChunkType; 6] = [
     NuccChunkType::NuccChunkCamera,
     NuccChunkType::NuccChunkLightDirc,
     NuccChunkType::NuccChunkLightPoint,
     NuccChunkType::NuccChunkLayerSet,
-    NuccChunkType::NuccChunkAmbient
+    NuccChunkType::NuccChunkAmbient,
+    NuccChunkType::NuccChunkMorphModel
 ];
 
 
@@ -22,46 +23,54 @@ fn main() {
     
     let args: Vec<String> = std::env::args().collect();
     let filepath = Path::new(&args[1]);
+
     let xfbin = read_xfbin(&filepath).unwrap();
     println!("Converting file: {:?}", filepath.file_name().unwrap().to_str().unwrap());
 
     let mut structs_to_add: Vec<Box<dyn NuccStruct>> = vec![];
 
     for chunk_type in &CHUNK_TYPES_TO_ADD {
-        if let Some(nucc_struct) = find_nucc_struct(&xfbin, chunk_type.clone()) {
-            // Downcast and add the NuccStruct to the vector
-            match chunk_type {
-                NuccChunkType::NuccChunkCamera => {
-                    if let Some(camera) = nucc_struct.downcast_ref::<NuccCamera>() {
-                        structs_to_add.push(Box::new(camera.clone()));
-                    }
-                }
-                NuccChunkType::NuccChunkLightDirc => {
-                    if let Some(lightdirc) = nucc_struct.downcast_ref::<NuccLightDirc>() {
-                        structs_to_add.push(Box::new(lightdirc.clone()));
-                    }
-                }
+        let nucc_structs = find_nucc_structs(&xfbin, chunk_type.clone());
 
-                NuccChunkType::NuccChunkLightPoint => {
-                    if let Some(lightpoint) = nucc_struct.downcast_ref::<NuccLightPoint>() {
-                        structs_to_add.push(Box::new(lightpoint.clone()));
+            for nucc_struct in nucc_structs {
+                match chunk_type {
+                    NuccChunkType::NuccChunkCamera => {
+                        if let Some(camera) = nucc_struct.downcast_ref::<NuccCamera>() {
+                            structs_to_add.push(Box::new(camera.clone()));
+                        }
                     }
-                }
+                    NuccChunkType::NuccChunkLightDirc => {
+                        if let Some(lightdirc) = nucc_struct.downcast_ref::<NuccLightDirc>() {
+                            structs_to_add.push(Box::new(lightdirc.clone()));
+                        }
+                    }
 
-                NuccChunkType::NuccChunkLayerSet => {
-                    if let Some(layerset) = nucc_struct.downcast_ref::<NuccLayerSet>() {
-                        structs_to_add.push(Box::new(layerset.clone()));
+                    NuccChunkType::NuccChunkLightPoint => {
+                        if let Some(lightpoint) = nucc_struct.downcast_ref::<NuccLightPoint>() {
+                            structs_to_add.push(Box::new(lightpoint.clone()));
+                        }
                     }
-                }
 
-                NuccChunkType::NuccChunkAmbient => {
-                    if let Some(ambient) = nucc_struct.downcast_ref::<NuccAmbient>() {
-                        structs_to_add.push(Box::new(ambient.clone()));
+                    NuccChunkType::NuccChunkLayerSet => {
+                        if let Some(layerset) = nucc_struct.downcast_ref::<NuccLayerSet>() {
+                            structs_to_add.push(Box::new(layerset.clone()));
+                        }
                     }
+
+                    NuccChunkType::NuccChunkAmbient => {
+                        if let Some(ambient) = nucc_struct.downcast_ref::<NuccAmbient>() {
+                            structs_to_add.push(Box::new(ambient.clone()));
+                        }
+                    }
+
+                    NuccChunkType::NuccChunkMorphModel => {
+                        if let Some(morphmodel) = nucc_struct.downcast_ref::<NuccMorphModel>() {
+                            structs_to_add.push(Box::new(morphmodel.clone()));
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
             }
-        }
     }
     
     let anm_chunk_name = filepath.file_stem().unwrap().to_str().unwrap().split('.').next().unwrap();
@@ -70,11 +79,10 @@ fn main() {
 
     let anm_struct_infos = xfbin.pages[0].struct_infos.clone();
 
-
     let dmg_anm_info = NuccStructInfo {
         chunk_name: anm_chunk_name.to_string() + "_dmg",
         chunk_type: NuccChunkType::NuccChunkAnm.to_string(),
-        filepath: anmstrm_info.filepath.replace(anm_chunk_name, (anm_chunk_name.to_string() + "_dmg").as_str())
+        filepath: anmstrm_info.filepath.clone().replace(anm_chunk_name, &(anm_chunk_name.to_string() + "_dmg")),
     };
 
     let mut new_xfbin = Xfbin::default();
@@ -107,23 +115,22 @@ fn main() {
     write_xfbin(new_xfbin, &Path::new(converted_filename.as_str())).unwrap();
 
  
-    println!("Finished converting strm to anm in file 'd35_10_anm.xfbin' in {:?}s", time.elapsed().as_secs_f64());
+    println!("Finished converting strm to anm in file '{}' in {:?}s", time.elapsed().as_secs_f64(), converted_filename);
 
 
 }
 
-fn find_nucc_struct(xfbin: &Xfbin, chunk_type: NuccChunkType) -> Option<&Box<dyn NuccStruct>> {
+fn find_nucc_structs(xfbin: &Xfbin, chunk_type: NuccChunkType) -> Vec<&Box<dyn NuccStruct>> {
     xfbin.pages.iter().flat_map(|page| {
-        page.structs.iter().find_map(|nucc_struct| {
+        page.structs.iter().filter_map(|nucc_struct| {
             if nucc_struct.chunk_type() == chunk_type {
                 Some(nucc_struct)
             } else {
                 None
             }
         })
-    }).next()
+    }).collect()
 }
-
 
 fn get_page_info<'a>(xfbin: &'a Xfbin, chunk_name: &'a str) -> (NuccStructInfo, Vec<NuccStructReference>) {
     let anm_struct_references = xfbin.pages.iter().flat_map(|page| {
@@ -150,4 +157,3 @@ fn get_page_info<'a>(xfbin: &'a Xfbin, chunk_name: &'a str) -> (NuccStructInfo, 
 
     (anmstrm_info, anm_struct_references)
 }
-
