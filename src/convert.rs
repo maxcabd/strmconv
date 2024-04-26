@@ -1,9 +1,9 @@
 use hashbrown::HashMap;
 use indicatif::{ProgressBar, ProgressStyle};
-use xfbin::Xfbin;
-use std::error::Error;
 use rayon::prelude::*;
+use std::error::Error;
 use std::mem::size_of_val;
+use xfbin::Xfbin;
 
 //use crate::structure::anm::{NuccAnm, AnmEntry, AnmEntryFormat, AnmCurveFormat, Curve, CurveHeader, AnmClump};
 
@@ -13,12 +13,10 @@ use xfbin::nucc_chunk::nucc_chunk_anm::{
 use xfbin::nucc_chunk::nucc_chunk_anmstrmframe::{AnmStrmEntry, Entry};
 use xfbin::nucc_chunk::{nucc_helper::*, NuccChunkType};
 
-use xfbin::nucc::NuccStructInfo;
+use xfbin::nucc::nucc_anm::NuccAnm;
 use xfbin::nucc::nucc_anmstrm::NuccAnmStrm;
 use xfbin::nucc::nucc_anmstrmframe::NuccAnmStrmFrame;
-use xfbin::nucc::nucc_anm::NuccAnm;
-
-
+use xfbin::nucc::NuccStructInfo;
 
 const SCALE_COMPRESS: f32 = 0x1000 as f32;
 const QUAT_COMPRESS: f32 = 0x4000 as f32;
@@ -26,29 +24,38 @@ const RGB_CONVERT: f32 = 255.0;
 
 /// Converts ANMSTRM data into a vector of ANM data (ANM and DMG ANM)
 pub fn convert_anmstrm(
-    xfbin: &Xfbin, anm_struct_info: &NuccStructInfo, dmg_struct_info: &NuccStructInfo,
+    xfbin: &Xfbin,
+    anm_struct_info: &NuccStructInfo,
+    dmg_struct_info: &NuccStructInfo,
 ) -> Result<Vec<NuccAnm>, Box<dyn Error>> {
-
-    let anmstrm: &NuccAnmStrm = xfbin.pages.iter().flat_map(|page| {
-        page.structs.iter().filter_map(|nucc_struct| {
-            if let NuccChunkType::NuccChunkAnmStrm = nucc_struct.chunk_type() {
-                Some(nucc_struct.downcast_ref::<NuccAnmStrm>().unwrap())
-            } else {
-                None
-            }
+    let anmstrm: &NuccAnmStrm = xfbin
+        .pages
+        .iter()
+        .flat_map(|page| {
+            page.structs.iter().filter_map(|nucc_struct| {
+                if let NuccChunkType::NuccChunkAnmStrm = nucc_struct.chunk_type() {
+                    Some(nucc_struct.downcast_ref::<NuccAnmStrm>().unwrap())
+                } else {
+                    None
+                }
+            })
         })
-    }).next().unwrap();
+        .next()
+        .unwrap();
 
-    let anmstrmframes = xfbin.pages.iter().flat_map(|page| {
-        page.structs.iter().filter_map(|nucc_struct| {
-            if let NuccChunkType::NuccChunkAnmStrmFrame = nucc_struct.chunk_type() {
-                Some(nucc_struct.downcast_ref::<NuccAnmStrmFrame>().unwrap())
-            } else {
-                None
-            }
+    let anmstrmframes = xfbin
+        .pages
+        .iter()
+        .flat_map(|page| {
+            page.structs.iter().filter_map(|nucc_struct| {
+                if let NuccChunkType::NuccChunkAnmStrmFrame = nucc_struct.chunk_type() {
+                    Some(nucc_struct.downcast_ref::<NuccAnmStrmFrame>().unwrap())
+                } else {
+                    None
+                }
+            })
         })
-    }).collect::<Vec<_>>();
-
+        .collect::<Vec<_>>();
 
     let anmstrm_entries = build_anmstrm_entries_map(anmstrmframes)?;
 
@@ -68,7 +75,9 @@ pub fn convert_anmstrm(
 
 /// Builds entries from ANMSTRM frames and returns a vector of entries.
 fn build_entries_from_frames(anmstrmframes: Vec<&NuccAnmStrmFrame>) -> Vec<Vec<AnmStrmEntry>> {
-    let entry_count = anmstrmframes.first().map_or(0, |frame | frame.entries.len() as u32);
+    let entry_count = anmstrmframes
+        .first()
+        .map_or(0, |frame| frame.entries.len() as u32);
 
     let mut anmstrm_entries: Vec<Vec<AnmStrmEntry>> = vec![Vec::new(); entry_count as usize];
 
@@ -473,21 +482,15 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                         color_values.push(anmstrm_entry_material.ambient_color[15]);
                     }
 
-                 
-
                     if frame == 0 {
                         if let Curve::Float(color_values) = &mut anm_entry.curves[16] {
                             color_values.push(0.0);
                         }
-                    
+
                         if let Curve::Float(color_values) = &mut anm_entry.curves[17] {
                             color_values.push(1.0);
                         }
                     }
-
-
-
-                    
                 }
 
                 Entry::Camera(anmstrm_entry_camera) => {
@@ -620,7 +623,6 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                             curve_size: 0,
                         });
 
-                    
                         anm_entry.curve_headers.push(CurveHeader {
                             curve_index: curve_index + 1,
                             curve_format: AnmCurveFormat::FLOAT1ALT as u16, // Curve format for Float
@@ -661,7 +663,6 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                         });
                     }
 
-        
                     if let Curve::Float(intensity_values) = &mut anm_entry.curves[1] {
                         intensity_values.push(anm_entry_lightpoint.intensity);
                     }
@@ -745,15 +746,14 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                         curve_index += 2;
                     }
 
-                        // Push keyframes for morph model
-                        if let Curve::Float(morph_values) = &mut anm_entry.curves[0] {
-                            morph_values.push(anm_entry_morphmodel.morph_weight[0]);
-                        }
+                    // Push keyframes for morph model
+                    if let Curve::Float(morph_values) = &mut anm_entry.curves[0] {
+                        morph_values.push(anm_entry_morphmodel.morph_weight[0]);
+                    }
 
-                        if let Curve::Float(morph_values) = &mut anm_entry.curves[1] {
-                            morph_values.push(anm_entry_morphmodel.morph_weight[1]);
-                        }
-                    
+                    if let Curve::Float(morph_values) = &mut anm_entry.curves[1] {
+                        morph_values.push(anm_entry_morphmodel.morph_weight[1]);
+                    }
                 }
                 _ => {
                     // Handle other entry types if necessary
@@ -773,12 +773,14 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
             }
 
             //If curve is RBG we need to pad the color values to be a multiple of 4
-            if curve.get_curve_format() == AnmCurveFormat::BYTE3 as u16 || curve.get_curve_format() == AnmCurveFormat::SHORT3 as u16 {
+            if curve.get_curve_format() == AnmCurveFormat::BYTE3 as u16
+                || curve.get_curve_format() == AnmCurveFormat::SHORT3 as u16
+            {
                 curve.pad_values();
             }
             // Make sure we update the frame count and curve size for the curves
             curve_header.curve_size += 0xC;
-                //(size_of_val(&curve) * curve.get_frame_count() as usize) as u16;
+            //(size_of_val(&curve) * curve.get_frame_count() as usize) as u16;
             curve_header.frame_count = curve.get_frame_count() as u16;
         }
 
@@ -793,17 +795,14 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
     anm_entries
 }
 
-
 /// Builds an ANM object from ANMSTRM and converted ANM entries.
 pub fn build_anm(
     anmstrm: &NuccAnmStrm,
-    anm_entries: Vec<AnmEntry>, struct_info: &NuccStructInfo,
+    anm_entries: Vec<AnmEntry>,
+    struct_info: &NuccStructInfo,
 ) -> Result<NuccAnm, Box<dyn Error>> {
-
-
     let mut anm_entries = anm_entries;
 
- 
     anm_entries.sort_by(|a, b| {
         a.coord
             .clump_index
@@ -811,8 +810,6 @@ pub fn build_anm(
             .then_with(|| a.coord.coord_index.cmp(&b.coord.coord_index))
             .then_with(|| a.entry_format.cmp(&b.entry_format))
     });
-    
-    
 
     let mut anm_clumps: Vec<AnmClump> = Vec::with_capacity(anmstrm.clumps.len());
 
@@ -825,7 +822,6 @@ pub fn build_anm(
 
         anm_clumps.push(anm_clump);
     }
-
 
     let anm = NuccAnm {
         struct_info: struct_info.clone(),
@@ -843,30 +839,45 @@ pub fn build_anm(
 }
 
 /// Builds a DMG ANM object from the ANM and ANMSTRM.
-fn build_dmg_anm(anm: &mut NuccAnm, anmstrm: &NuccAnmStrm, struct_info: &NuccStructInfo) -> NuccAnm {
+fn build_dmg_anm(
+    anm: &mut NuccAnm,
+    anmstrm: &NuccAnmStrm,
+    struct_info: &NuccStructInfo,
+) -> NuccAnm {
     // ----------------- Clumps -----------------
-    let clumps = anm.clumps.clone();
+    let mut clumps = anm.clumps.clone();
 
     let dmg_clump_index = clumps
         .par_iter()
         .position_any(|clump| clump.bone_material_indices.len() == 97)
         .unwrap_or(0);
 
-    //let dmg_clump = clumps[dmg_clump_index].clone();
+    let dmg_clump = clumps[dmg_clump_index].clone();
 
-    //clumps.retain(|clump| clump.clump_index == dmg_clump.clump_index as u32); // Remove unnecessary clumps for the DMG ANM
+    clumps.retain(|clump| clump.clump_index == dmg_clump.clump_index as u32); // Remove unnecessary clumps for the DMG ANM
 
+    for clump in &mut clumps {
+        clump.clump_index -= dmg_clump.clump_index as u32;
+
+        for index in &mut clump.bone_material_indices {
+            *index -= dmg_clump.clump_index as u32;
+        }
+
+        for index in &mut clump.model_indices {
+            *index -= dmg_clump.clump_index as u32;
+        }
+    }
 
     // ----------------- Coords ----------------- //
-    let coord_parents = anm.coord_parents.clone();
+    let mut coord_parents = anm.coord_parents.clone();
     // Remove unnecessary coord parents for the DMG ANM
-    /*coord_parents.retain(|coord_parent| coord_parent.parent.clump_index == dmg_clump_index as i16); // Only keep the coord parents related to the DMG clump
+    coord_parents.retain(|coord_parent| coord_parent.parent.clump_index == dmg_clump_index as i16); // Only keep the coord parents related to the DMG clump
 
-    // update indices for the DMG coord parents
+    // Update the coord indices
     for coord_parent in &mut coord_parents {
         coord_parent.parent.clump_index -= dmg_clump_index as i16;
         coord_parent.child.clump_index -= dmg_clump_index as i16;
-    }*/
+    }
 
     // ----------------- Entries ----------------- //
     let mut dmg_entries: Vec<AnmEntry> = anm
@@ -876,9 +887,9 @@ fn build_dmg_anm(anm: &mut NuccAnm, anmstrm: &NuccAnmStrm, struct_info: &NuccStr
         .cloned()
         .collect();
 
-    /*for entry in &mut dmg_entries {
+    for entry in &mut dmg_entries {
         entry.coord.clump_index -= dmg_clump_index as i16;
-    }*/
+    }
 
     dmg_entries.sort_by(|a, b| a.coord.coord_index.cmp(&b.coord.coord_index));
 
@@ -897,8 +908,7 @@ fn build_dmg_anm(anm: &mut NuccAnm, anmstrm: &NuccAnmStrm, struct_info: &NuccStr
 
     // Mutate the original ANM
     /*anm.clumps
-        .retain(|clump| clump.clump_index != dmg_clump.clump_index as u32); // Remove the DMG clump from the original ANM*/
-    
+    .retain(|clump| clump.clump_index != dmg_clump.clump_index as u32); // Remove the DMG clump from the original ANM*/
 
     // we need to edit the clump indices starting from the DMG clump index to the end
     /*for clump in &mut anm.clumps {
@@ -918,7 +928,7 @@ fn build_dmg_anm(anm: &mut NuccAnm, anmstrm: &NuccAnmStrm, struct_info: &NuccStr
 
     /*anm.coord_parents
         .retain(|coord_parent| coord_parent.parent.clump_index != dmg_clump_index as i16); // Remove the DMG coord parents from the original ANM
-    
+
 
     for coord in &mut anm.coord_parents {
         if coord.parent.clump_index > dmg_clump_index as i16 {
@@ -927,9 +937,9 @@ fn build_dmg_anm(anm: &mut NuccAnm, anmstrm: &NuccAnmStrm, struct_info: &NuccStr
         }
     }*/
 
-    anm.entries.retain(|entry| entry.coord.clump_index != dmg_clump_index as i16); 
+    anm.entries
+        .retain(|entry| entry.coord.clump_index != dmg_clump_index as i16);
     // Remove the DMG entries from the original ANM if the clump index matches the DMG clump index
-
 
     // we need to also edit the entry clump indices starting from the DMG clump index to the end
     /*for entry in &mut anm.entries {
