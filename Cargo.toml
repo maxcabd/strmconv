@@ -25,5 +25,10 @@ rayon = "1.5"
 serde = { version = "1.0.130", features = ["derive"] }
 serde_json = "1.0"
 
+# used for reading and writing XML files
+quick-xml = "0.29.0"
+
 # used for reading and writing CyberConnect2's XFBIN files
-xfbin = { path = "../xfbin" }
+xfbin = { path = "../xfbin-dev" }
+
+xml2fcv = { path = "../xml2fcv" }
