@@ -4,9 +4,8 @@ use std::fs;
 use std::path::Path;
 
 use xfbin::nucc::{
-    NuccAmbient, NuccCamera, NuccLayerSet, NuccLightDirc, 
-    NuccLightPoint, NuccMorphModel, NuccStruct, 
-    NuccStructInfo, NuccStructReference
+    NuccAmbient, NuccCamera, NuccLayerSet, NuccLightDirc, NuccLightPoint, NuccMorphModel,
+    NuccStruct, NuccStructInfo, NuccStructReference,
 };
 use xfbin::nucc_chunk::NuccChunkType;
 use xfbin::{read_xfbin, write_xfbin};
@@ -14,7 +13,6 @@ use xfbin::{xfbin::XfbinPage, Xfbin};
 
 use converter::convert_anmstrm;
 use xml2fcv::{create_fcv_xfbin, get_frame_settings};
-
 
 const CHUNK_TYPES_TO_ADD: [NuccChunkType; 6] = [
     NuccChunkType::NuccChunkCamera,
@@ -31,7 +29,10 @@ fn main() {
     let args: Vec<String> = std::env::args().collect();
 
     if args.len() != 3 {
-        panic!("Invalid number of arguments! Expected 3, got {}", args.len() - 1);
+        panic!(
+            "Invalid number of arguments! Expected 3, got {}",
+            args.len() - 1
+        );
     }
 
     let filepath = Path::new(args.iter().find(|arg| arg.ends_with(".xfbin")).unwrap());
@@ -45,7 +46,7 @@ fn main() {
     let mut structs_to_add: Vec<Box<dyn NuccStruct>> = vec![];
 
     for chunk_type in &CHUNK_TYPES_TO_ADD {
-        let nucc_structs = find_nucc_structs(&xfbin, chunk_type.clone());
+        let nucc_structs = xfbin.find_nucc_structs(chunk_type.clone());
 
         for nucc_struct in nucc_structs {
             match chunk_type {
@@ -142,14 +143,15 @@ fn main() {
     new_xfbin.pages.push(anm_page);
     new_xfbin.pages.push(dmg_anm_page);
 
-    
     let xml_path = args.iter().find(|arg| arg.ends_with(".xml")).unwrap();
     let frame_settings = get_frame_settings(fs::read_to_string(xml_path).unwrap().as_str());
-    println!("Parsing fcurve settings from '{}'", Path::new(xml_path).file_name().unwrap().to_str().unwrap());
+    println!(
+        "Parsing fcurve settings from '{}'",
+        Path::new(xml_path).file_name().unwrap().to_str().unwrap()
+    );
 
     let mut fcv_xfbin = Xfbin::default();
     create_fcv_xfbin(&mut fcv_xfbin, &frame_settings, anm_chunk_name);
-    
 
     for page in fcv_xfbin.pages {
         new_xfbin.pages.push(page);
@@ -157,28 +159,12 @@ fn main() {
 
     let converted_filename = anm_chunk_name.to_string() + ".anm.xfbin";
     write_xfbin(new_xfbin, &Path::new(converted_filename.as_str())).unwrap();
-    
+
     println!(
         "Finished converting strm to anm file '{}' in {:?}s \n",
         converted_filename,
         time.elapsed().as_secs_f64()
     );
-}
-
-fn find_nucc_structs(xfbin: &Xfbin, chunk_type: NuccChunkType) -> Vec<&Box<dyn NuccStruct>> {
-    xfbin
-        .pages
-        .iter()
-        .flat_map(|page| {
-            page.structs.iter().filter_map(|nucc_struct| {
-                if nucc_struct.chunk_type() == chunk_type {
-                    Some(nucc_struct)
-                } else {
-                    None
-                }
-            })
-        })
-        .collect()
 }
 
 fn get_page_info<'a>(

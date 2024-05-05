@@ -753,12 +753,18 @@ fn convert_entries(anmstrm_entries: HashMap<u16, Vec<AnmStrmEntry>>) -> Vec<AnmE
                     }
 
                     // Push keyframes for morph model
-                    if let Curve::Float(morph_values) = &mut anm_entry.curves[0] {
-                        morph_values.push(anm_entry_morphmodel.morph_weight[0]);
-                    }
+                    if anm_entry_morphmodel.frame_count == 1 {
+                        if let Curve::Float(morph_value) = &mut anm_entry.curves[0] {
+                            morph_value.push(anm_entry_morphmodel.morph_weight[0]);
+                        }
+                    } else if anm_entry_morphmodel.frame_count == 2 {
+                        if let Curve::Float(morph_value) = &mut anm_entry.curves[0] {
+                            morph_value.push(anm_entry_morphmodel.morph_weight[0]);
+                        }
 
-                    if let Curve::Float(morph_values) = &mut anm_entry.curves[1] {
-                        morph_values.push(anm_entry_morphmodel.morph_weight[1]);
+                        if let Curve::Float(morph_value) = &mut anm_entry.curves[1] {
+                            morph_value.push(anm_entry_morphmodel.morph_weight[1]);
+                        }
                     }
                 }
                 _ => {
@@ -860,22 +866,24 @@ fn build_dmg_anm(
         .position_any(|clump| clump.bone_material_indices.len() == 97)
         .unwrap_or(0);
 
-    // Make a hashmap clumps that have less than 97 bone material indices, with the key being the index of the clump from the clumps vector
+    
     let mut clumps_map: HashMap<usize, AnmClump> = HashMap::new();
 
-    // First get the chunk_name of the reference we're going to remove
+    // Make a hashmap for clumps that have more than 97 bone material indices, with the key being the index of the clump from the clumps vector
     for (i, clump) in dmg_clumps.iter().enumerate() {
         if clump.bone_material_indices.len() > 97 {
             clumps_map.insert(i, clump.clone());
         }
     }
 
-    dmg_clumps.retain(|clump| clump.bone_material_indices.len() <= 97);
+    // Retain clumps not in the clumps map
+    dmg_clumps.retain(|clump| !clumps_map.values().any(|value| value == clump));
 
     // Iterate over the clumps and update the clump indices using the clumps map
     for clump in &mut dmg_clumps {
+        let clump_index = anm.clumps.iter().position(|r| r == clump).unwrap() as u32;
+
         for (key, value) in clumps_map.iter() {
-            let clump_index = anm.clumps.iter().position(|r| r == clump).unwrap() as u32;
             let amount_to_subtract =
                 1 + (value.bone_material_indices.len() + value.model_indices.len()) as u32;
 
